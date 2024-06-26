@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Web Player</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background-color: black;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loader {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #046BF1;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        #error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-size: 1.5em;
+            display: none;
+            text-align: center;
+        }
+    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+
+<body>
+    <div id="loading">
+        <div class="loader"></div>
+    </div>
+    <div id="error-message">An error occurred while trying to play the video.</div>
+    <video id="video" autoplay playsinline></video>
+    <script>
+        var video = document.getElementById('video');
+        var loading = document.getElementById('loading');
+        var errorMessage = document.getElementById('error-message');
+        var hls = null; // Declare hls variable
+
+        function hideLoading() {
+            loading.style.display = 'none';
+        }
+
+        function showLoading() {
+            loading.style.display = 'flex';
+        }
+
+        function showError(message) {
+            hideLoading();
+            video.style.display = 'none';
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        showLoading();
+
+        function loadHlsPlayer(videoUrl) {
+            if (video.canPlayType('application/vnd.apple.mpegurl') && !Hls.isSupported()) {
+                video.src = videoUrl;
+                video.addEventListener('canplay', function () {
+                    hideLoading();
+                    video.play();
+                });
+                return;
+            }
+
+            if (typeof Hls === 'undefined') {
+                showError("Your browser doesn't support native HLS playback and hls.js is not available.");
+                return;
+            }
+
+            hls = new Hls();
+            hls.loadSource(videoUrl);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                hideLoading();
+                video.play();
+            });
+            hls.on(Hls.Events.ERROR, function (event, data) {
+                if (data.fatal) {
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            console.log("fatal network error encountered, try to recover");
+                            hls.startLoad();
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            console.log("fatal media error encountered, try to recover");
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            console.log("unrecoverable fatal error");
+                            showError("An unrecoverable error occurred while trying to play the video.");
+                            hls.destroy();
+                            break;
+                    }
+                }
+            });
+        }
+
+        loadHlsPlayer('https://dev01.dguardcloud.com.br/live/l_6GdB7ie.stream/playlist.m3u8');
+
+        video.addEventListener('waiting', showLoading);
+        video.addEventListener('playing', hideLoading);
+        video.addEventListener('canplay', hideLoading);
+        video.addEventListener('error', function () {
+            showError("An error occurred while trying to play the video.");
+        });
+
+        window.addEventListener('offline', function () {
+            showError("No internet connection. Please check your network and try again.");
+        });
+
+        window.addEventListener('message', function (event) {
+            var data = event.data;
+            if (data.type === 'loadHlsPlayer') {
+                loadHlsPlayer(data.videoUrl);
+            }
+        });
+
+
+    </script>
+</body>
+
+</html>
